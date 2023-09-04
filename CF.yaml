@@ -1,0 +1,348 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Food Order'
+
+Resources:
+  Restaurants:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: Restaurants
+      AttributeDefinitions:
+        - AttributeName: res_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: res_name
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  order:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: order
+
+  recipt:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: recipt
+
+  mailSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      Protocol: email
+      TopicArn: !Ref order
+      Endpoint: shreu44@gmail.com
+  
+  reciptSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      Protocol: sqs
+      TopicArn: !Ref order
+      Endpoint: !GetAtt recipt.Arn  
+
+  OrderLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'order'
+      Runtime: 'nodejs14.x'
+      Handler: 'index.handler'
+      Code:
+        S3Bucket: csscript
+        S3Key: order.zip
+      Environment:
+        Variables:
+          snsarn: !Ref order
+          sqsurl: !GetAtt recipt.QueueUrl
+      Role: 'arn:aws:iam::137862018856:role/LabRole'
+  
+  MenuLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'menu'
+      Runtime: 'nodejs14.x'
+      Handler: 'index.handler'
+      Code:
+        S3Bucket: csscript
+        S3Key: menu.zip
+      Role: 'arn:aws:iam::137862018856:role/LabRole'
+
+  ReciptLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'recipt'
+      Runtime: 'nodejs14.x'
+      Handler: 'index.handler'
+      Code:
+        S3Bucket: csscript
+        S3Key: recipt.zip
+      Environment:
+        Variables:
+          sqsurl: !GetAtt recipt.QueueUrl
+      Role: 'arn:aws:iam::137862018856:role/LabRole'
+
+  RestaurantRestAPI:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: Restaurant
+    DependsOn:
+      - OrderLambda
+
+  APIGatewayPermission1:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt OrderLambda.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+      - APIGatewayDeployment
+
+  APIGatewayPermission2:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt MenuLambda.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+      - APIGatewayDeployment
+
+  APIGatewayPermission3:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt ReciptLambda.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+      - APIGatewayDeployment
+
+  OrderResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ParentId: !GetAtt RestaurantRestAPI.RootResourceId
+      PathPart: order
+    DependsOn:
+      - RestaurantRestAPI
+
+  OptionsMethod2:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref OrderResource
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              "application/json": ""
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          "application/json": '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+          ResponseModels:
+            "application/json": "Empty"
+
+  ordermethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref OrderResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+      Integration:
+        Type: AWS_PROXY
+        IntegrationResponses:
+          - StatusCode: 200
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFuncArn}/invocations'
+          - LambdaFuncArn: !GetAtt OrderLambda.Arn
+    DependsOn:
+      - OrderResource
+
+
+  MenuResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ParentId: !GetAtt RestaurantRestAPI.RootResourceId
+      PathPart: places
+    DependsOn:
+      - RestaurantRestAPI
+
+  OptionsMethod1:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref MenuResource
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              "application/json": ""
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          "application/json": '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+          ResponseModels:
+            "application/json": "Empty"
+
+  menumethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref MenuResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+      Integration:
+        Type: AWS_PROXY
+        IntegrationResponses:
+          - StatusCode: 200
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFuncArn}/invocations'
+          - LambdaFuncArn: !GetAtt MenuLambda.Arn
+    DependsOn:
+      - MenuResource
+
+  
+  ReciptResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ParentId: !GetAtt RestaurantRestAPI.RootResourceId
+      PathPart: recipt
+    DependsOn:
+      - RestaurantRestAPI
+
+  OptionsMethod3:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref ReciptResource
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              "application/json": ""
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          "application/json": '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+          ResponseModels:
+            "application/json": "Empty"
+
+  reciptmethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      ResourceId: !Ref ReciptResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+      Integration:
+        Type: AWS_PROXY
+        IntegrationResponses:
+          - StatusCode: 200
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFuncArn}/invocations'
+          - LambdaFuncArn: !GetAtt ReciptLambda.Arn
+    DependsOn:
+      - ReciptResource
+
+  APIGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId: !Ref RestaurantRestAPI
+      StageName: !Ref EnvironmentName
+    DependsOn:
+      - ordermethod
+
+  FEinstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      KeyName: 'product-key'
+      InstanceType: 't2.micro'
+      SecurityGroups:
+        - !Ref 'FEinstanceSecurityGroup'
+      ImageId: 'ami-0f34c5ae932e6f0e4'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo su
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo service docker start
+          docker pull shreyasbalajinagaraja/foodapp:latest
+          docker run -d -e REACT_APP_API_ENDPOINT=https://${RestaurantRestAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod -p 3000:3000 shreyasbalajinagaraja/foodapp:latest
+
+    DependsOn: APIGatewayDeployment
+
+  FEinstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow SSH'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          ToPort: '22'
+          FromPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          ToPort: '3000'
+          FromPort: '3000'
+          CidrIp: '0.0.0.0/0'
+
+Parameters:
+  LambdaFuncName:
+    Type: String
+    Default: Backend
+
+  APIName:
+    Type: String
+    Default: Restaurant
+
+  EnvironmentName:
+    Type: String
+    Default: Prod
+  
+  

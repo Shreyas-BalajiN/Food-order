@@ -1,0 +1,68 @@
+.App {
+  text-align: center;
+}
+.card {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  float: left;
+  margin-left: 2rem;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.card-content {
+  font-size: 14px;
+  color: #555555;
+  margin-bottom: 20px;
+}
+
+.card-button {
+  background-color: #007bff;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.card-button:hover {
+  background-color: #0056b3;
+}
+
+.custom-card{
+  width: 50rem !important;
+  height: 40rem !important;
+  margin-left: 23rem !important;
+  background-color: #837c7c !important;
+  align-items: center !important;
+}
+
+.reciptCard{
+  width: 18rem !important;
+  height: 24rem !important;
+  margin-left: 38rem !important;
+  background-color: #837c7c !important;
+  align-items: center !important;
+  margin-top: 5rem;
+}
+
+input[type="text"] {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  margin-left: 30px;
+}
+
+input[type="text"]:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.25);
+}

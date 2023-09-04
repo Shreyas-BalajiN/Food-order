@@ -1,0 +1,4 @@
+backend/node_modules
+lambdas/menu/node_modules/
+lambdas/order/node_modules/
+lambdas/recipt/node_modules/
